@@ -141,8 +141,7 @@ curl -X POST http://localhost:8000/predict \
   }'
 ```
 
-**With Docker** (Dockerfile is written and included; build/run not verified in this environment —
-verify locally before relying on it):
+**With Docker** (build and run verified locally)
 ```bash
 cd api
 docker build -t churn-api .
@@ -151,6 +150,5 @@ docker run -p 8000:8000 churn-api
 
 ## What's not included
 
-A hosted, publicly reachable demo (e.g. on Render/Railway/HF Spaces) was intentionally left out of this
-project — the API and Dockerfile are ready to deploy, but the deployment step itself needs to be done
-from an environment with hosting-provider access, not this build environment.
+A hosted, publicly reachable demo (e.g. on Render/Railway/HF Spaces) is not included — the API and
+Docker image are fully built and verified locally, but haven't been deployed to a public endpoint.
