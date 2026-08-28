@@ -70,12 +70,13 @@ pure cost-minimization for real deployment.
 - `Credit_Card_Churn_Prediction_v2.ipynb` — full executed notebook
 - `Credit_Card_Churn_Prediction_v2.html` — HTML export for submission
 - `BankChurners.csv` — source data
+- `requirements.txt` — pinned dependencies
 - `README.md` — this file
 
 ## How to run
 
 ```bash
-pip install pandas numpy matplotlib seaborn scikit-learn imbalanced-learn xgboost lightgbm shap
+pip install -r requirements.txt
 jupyter nbconvert --to notebook --execute --inplace Credit_Card_Churn_Prediction_v2.ipynb
 ```
 
