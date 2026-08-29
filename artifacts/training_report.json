@@ -1,0 +1,75 @@
+{
+  "selected_strategy": "scale_pos_weight",
+  "threshold": 0.09,
+  "validation_cost": 102500,
+  "search_summary": {
+    "smote": {
+      "cv_recall": 0.913548951048951,
+      "best_params": {
+        "model__learning_rate": 0.05428735904672993,
+        "model__max_depth": 5,
+        "model__n_estimators": 249,
+        "model__num_leaves": 16
+      },
+      "validation": {
+        "recall": 0.9003831417624522,
+        "precision": 0.8801498127340824,
+        "f1": 0.8901515151515151,
+        "roc_auc": 0.9921681316204642
+      }
+    },
+    "class_weight": {
+      "cv_recall": 0.9346935958778065,
+      "best_params": {
+        "model__learning_rate": 0.046995735689060486,
+        "model__max_depth": 5,
+        "model__n_estimators": 187,
+        "model__num_leaves": 50
+      },
+      "validation": {
+        "recall": 0.9386973180076629,
+        "precision": 0.8506944444444444,
+        "f1": 0.8925318761384335,
+        "roc_auc": 0.9920216362407032
+      }
+    },
+    "scale_pos_weight": {
+      "cv_recall": 0.9375736105999264,
+      "best_params": {
+        "model__learning_rate": 0.046995735689060486,
+        "model__max_depth": 5,
+        "model__n_estimators": 187,
+        "model__num_leaves": 50
+      },
+      "validation": {
+        "recall": 0.9348659003831418,
+        "precision": 0.8531468531468531,
+        "f1": 0.8921389396709324,
+        "roc_auc": 0.9922526481857111
+      }
+    }
+  },
+  "test_default_threshold_metrics": {
+    "recall": 0.92,
+    "precision": 0.8470254957507082,
+    "f1": 0.8820058997050148,
+    "roc_auc": 0.991433093655316
+  },
+  "test_operating_threshold_metrics": {
+    "recall": 0.9907692307692307,
+    "precision": 0.5619546247818499,
+    "f1": 0.7171492204899778,
+    "roc_auc": 0.991433093655316
+  },
+  "artifact": "artifacts/model_artifacts.joblib",
+  "reference_profile": "artifacts/reference_profile.json",
+  "runtime_versions": {
+    "scikit_learn": "1.8.0",
+    "lightgbm": "4.6.0",
+    "imbalanced_learn": "0.14.1",
+    "numpy": "2.3.5",
+    "pandas": "2.2.3",
+    "joblib": "1.5.3"
+  },
+  "dataset_sha256": "591c01e299f30e5a4d4df0282e9b0fa6d16a23a6ddeebc9f850d923b6923a42d"
+}

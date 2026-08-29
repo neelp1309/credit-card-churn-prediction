@@ -1,0 +1,10 @@
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+mlruns/
+prediction_logs/
+*.pyc
+.DS_Store
+# Keep the current model artifact in Git only if you intentionally want a demo artifact checked in.
