@@ -1,154 +1,237 @@
 # Thera Bank — Credit Card Churn Prediction
 
-Predicting which credit-card customers are likely to attrite, with explainability, cost-sensitive
-business framing, and a served prediction API — built as the foundation project of a 4-project
-applied ML portfolio.
+Production-oriented credit-card churn project demonstrating model development, leakage-aware validation, explainability, cost-sensitive decisioning, API serving, automated tests, CI, experiment tracking, and monitoring hooks.
 
-## Problem
+> **Repository status:** P0 is fully implemented and the leakage-safe training path has now been executed on the supplied `BankChurners.csv`. The refreshed model artifact, drift reference profile, and training report are included. P1 engineering hooks (CI, MLflow integration, Prometheus metrics, drift checks, and cloud deployment config) are implemented; a public cloud deployment still requires an external account.
 
-~16% of Thera Bank's credit card customers have churned. Losing a cardholder costs the bank recurring
-fee/interest/interchange revenue, so the goal is to flag at-risk customers early enough for retention
-action, explain *why* a customer is flagged, and tie the model to a rupee-denominated business decision
-rather than stopping at an accuracy number.
+## Why this revision matters
 
-## Data
+The original analysis had a strong untouched test split, but its hyperparameter search applied SMOTE before `RandomizedSearchCV`. The revised training path fixes that by putting SMOTE **inside each CV fold**. It also separates model tuning, threshold selection, and final testing:
 
-`BankChurners.csv` — 10,127 customers, 20 features (demographic, account, and transaction behavior) plus
-the churn label. Two real data-quality issues were found and corrected during preprocessing: genuine
-missing values in `Education_Level` (15%) and `Marital_Status` (7.4%), and a garbage `"abc"` entry in
-`Income_Category` (~11% of rows) — all mapped to an explicit `"Unknown"` category with the rationale
-documented in the notebook.
-
-## Approach
-
-1. **EDA** — univariate/bivariate/multivariate analysis of churn drivers, with a documented
-   multicollinearity finding (`Credit_Limit` vs `Avg_Open_To_Buy`, r≈0.996).
-2. **Preprocessing** — missing-value handling with rationale, no outlier capping (justified: all models
-   used are tree-based, so capping risks discarding high-value customers with no modeling benefit),
-   `CLIENTNUM` dropped, one collinear feature dropped, one-hot encoding, stratified train/test split
-   with no leakage.
-3. **Modeling** — 7 classifiers (Decision Tree, Random Forest, Gradient Boosting, AdaBoost, Bagging,
-   XGBoost, LightGBM) compared across three training regimes (original imbalanced, SMOTE, undersampled),
-   evaluated on **churn-class recall/precision/F1**, not accuracy, given the ~84/16 class imbalance.
-4. **Imbalance decision** — SMOTE carried forward (raises churn recall without discarding majority-class
-   training data, unlike undersampling).
-5. **Tuning & stacking** — `RandomizedSearchCV` on LightGBM, XGBoost, and Random Forest, plus a
-   `StackingClassifier` combining all three with a logistic-regression meta-learner.
-6. **Explainability** — SHAP summary plot + individual waterfall plots for a true positive, false
-   negative, and false positive.
-7. **Business framing** — cost-sensitive threshold analysis translating false negatives/positives into
-   rupee cost, plus a calibration check on the resulting probabilities.
-8. **Leakage-aware ablation** — retrained the final model without trailing-12-month activity features to
-   measure (not just state) how much of the headline performance depends on near-term behavioral signal.
-9. **5-fold cross-validation** — confirmed the model comparison ranking is stable, not an artifact of one
-   train/test split.
-10. **Served as an API** — a FastAPI `/predict` endpoint wrapping the final model, returning churn
-    probability and the top-3 SHAP-driven reasons per prediction, containerized with Docker.
-
-## Results
-
-| Model | Recall (churn) | Precision (churn) | F1 (churn) | ROC-AUC |
-|---|---|---|---|---|
-| **LightGBM (tuned) — final model** | 0.877 | 0.893 | **0.885** | 0.990 |
-| XGBoost (tuned) | 0.874 | 0.890 | 0.882 | 0.991 |
-| Stacked Ensemble | 0.883 | 0.880 | 0.882 | 0.988 |
-| Random Forest (tuned) | 0.849 | 0.860 | 0.854 | 0.984 |
-
-**5-fold CV (mean ± std)** confirms this ranking is stable: LightGBM 0.909±0.016 recall / 0.992±0.001
-ROC-AUC, statistically indistinguishable from the Stacked Ensemble — LightGBM was shipped as the final
-model as the simpler, equally-performing option, a maintainability call rather than a performance one.
-
-**Final model: tuned LightGBM** — catches 88 of every 100 customers who actually churn, at 89%
-precision.
-
-**Top SHAP drivers of predicted churn:** `Total_Trans_Ct`, `Total_Trans_Amt`, `Total_Revolving_Bal`,
-`Total_Relationship_Count`, `Total_Ct_Chng_Q4_Q1` — declining transaction activity and revolving balance
-dominate, consistent with the EDA.
-
-## Business impact
-
-Assuming ≈₹20,000 cost per missed churner vs. ≈₹500 per unnecessary retention outreach (illustrative,
-adjustable — see Limitations), the cost-minimizing classification threshold sits well below the default
-0.50. On the held-out test set, operating at the cost-optimal threshold instead of 0.50 saves an
-estimated **₹6.07 lakh** in modeled false-negative/false-positive cost. Because the unconstrained
-cost-optimal threshold pushes toward flagging a large share of customers, a capacity constraint (e.g.,
-"flag the top N% highest-risk customers per month") is recommended alongside pure cost-minimization for
-real deployment.
-
-## Limitations (full detail in notebook section 16)
-
-- **Temporal leakage risk, measured not assumed:** removing trailing-12-month activity features drops
-  ROC-AUC from 0.990 to 0.837 and recall from 88% to 43%. The model is best understood as identifying
-  customers *already disengaging*, not forecasting churn far in advance. See section 14 of the notebook.
-- No true out-of-time validation is possible — the dataset has no transaction timestamps.
-- The ₹20,000/₹500 cost figures are illustrative planning assumptions, not confirmed bank data.
-- The cost-optimal threshold needs a capacity constraint for real deployment (see above).
-- `Card_Category` is heavily imbalanced toward Blue-tier — Gold/Platinum/Silver attributions should be
-  read directionally, not precisely.
-
-## Architecture
-
-![Architecture diagram](architecture_diagram.png)
-
-## Repo contents
-
-```
-├── Credit_Card_Churn_Prediction_FINAL.ipynb   # full executed notebook
-├── Credit_Card_Churn_Prediction_FINAL.html    # HTML export for submission
-├── BankChurners.csv                           # source data
-├── requirements.txt                           # pinned notebook dependencies
-├── architecture_diagram.png                   # pipeline diagram
-├── README.md                                  # this file
-└── api/
-    ├── app.py                                 # FastAPI serving layer
-    ├── model_artifacts.joblib                 # trained model + preprocessing metadata
-    ├── requirements.txt                       # pinned API dependencies
-    ├── Dockerfile
-    └── .dockerignore
+```text
+training split
+   ↓
+CV model/imbalance search
+   ↓
+validation split → choose business threshold
+   ↓
+refit selected model on train + validation
+   ↓
+untouched test → final report once
 ```
 
-## How to run the notebook
+The production training module compares three imbalance approaches using training-CV recall:
+
+1. fold-safe SMOTE
+2. LightGBM `class_weight="balanced"`
+3. LightGBM `scale_pos_weight`
+
+This is more defensible than choosing SMOTE by default.
+
+## Repository
+
+```text
+.
+├── api/
+│   ├── app.py                    # FastAPI + SHAP + Prometheus metrics
+│   ├── preprocessing.py
+│   ├── requirements.txt
+│   └── Dockerfile
+├── artifacts/
+│   ├── model_artifacts.joblib    # refreshed leakage-safe model
+│   ├── reference_profile.json
+│   └── training_report.json
+├── data/
+│   ├── BankChurners.csv          # supplied training dataset
+│   └── README.md
+├── docs/
+│   ├── architecture_diagram.png
+│   ├── P0_P1_STATUS.md
+│   ├── TEMPORAL_VALIDATION.md
+│   ├── TRAINING_RESULTS.md
+│   └── README_V1.md              # archived original README
+├── monitoring/
+│   ├── drift.py
+│   └── README.md
+├── notebooks/
+│   ├── Credit_Card_Churn_Prediction_P0_FIXED.ipynb
+│   ├── analysis_v1_original.ipynb
+│   └── analysis_v1_original.html
+├── src/
+│   └── train.py                  # leakage-safe training + MLflow + artifact/profile generation
+├── tests/
+├── .github/workflows/ci.yml
+├── render.yaml
+├── requirements.txt
+├── requirements-dev.txt
+└── Makefile
+```
+
+
+## Leakage-safe retraining results
+
+The corrected pipeline was executed on **10,127 customers** (1,627 attrited / 8,500 existing). Strategy selection used 5-fold training CV recall only.
+
+| Strategy | CV recall | Validation recall | Validation precision | Validation F1 | Validation ROC-AUC |
+|---|---:|---:|---:|---:|---:|
+| Fold-safe SMOTE | 0.9135 | 0.9004 | 0.8801 | 0.8902 | 0.9922 |
+| `class_weight="balanced"` | 0.9347 | **0.9387** | 0.8507 | **0.8925** | 0.9920 |
+| `scale_pos_weight` | **0.9376** | 0.9349 | 0.8531 | 0.8921 | **0.9923** |
+
+**Selected strategy:** `scale_pos_weight`.
+
+On the untouched test set at threshold **0.50**: **Recall 0.9200, Precision 0.8470, F1 0.8820, ROC-AUC 0.9914**.
+
+The validation-only business-cost search selected threshold **0.09**. At that operating point the untouched test set gives **Recall 0.9908, Precision 0.5620, F1 0.7171**. The low threshold is intentional because the configured false-negative cost (20,000) is 40x the false-positive cost (500).
+
+See `docs/TRAINING_RESULTS.md` and `artifacts/training_report.json` for the full reproducible results.
+
+## P0 improvements implemented
+
+- SMOTE runs inside CV folds during tuning.
+- Imbalance strategy comparison includes class weighting and `scale_pos_weight`.
+- Business threshold is selected on validation data rather than optimized on the final test set.
+- API threshold is constrained to `[0, 1]`.
+- Strong Pydantic field validation and rejection of unknown fields.
+- Preprocessing is extracted and tested against the model's exact training-column order.
+- Dependencies and repository paths are explicit and reproducible.
+- Automated unit/integration tests are included.
+
+## P1 improvements implemented
+
+- **GitHub Actions:** lint, tests, Docker build on every push/PR.
+- **MLflow:** logs dataset hash, strategy, hyperparameters, CV/validation/test metrics, model artifact, training report, and reference drift profile.
+- **Monitoring:** `/metrics` exposes Prometheus metrics for request volume, latency, prediction counts, and probability distribution.
+- **Drift:** structured prediction logs can be compared with the training reference profile using PSI for numeric features and total-variation distance for categorical features.
+- **Cloud-ready:** `render.yaml` + Docker deployment configuration are included.
+
+A true temporal validation is **not claimed** because the dataset has no timestamp suitable for an out-of-time feature/label split. See `docs/TEMPORAL_VALIDATION.md`.
+
+## Set up
 
 ```bash
-pip install -r requirements.txt
-jupyter nbconvert --to notebook --execute --inplace Credit_Card_Churn_Prediction_FINAL.ipynb
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+pip install -r requirements-dev.txt
 ```
 
-All random states are fixed (`random_state=42`) for reproducibility.
+The supplied source dataset is included at `data/BankChurners.csv`.
 
-## How to run the API
+## Train with leakage-safe CV + MLflow
 
-**Locally:**
 ```bash
-cd api
-pip install -r requirements.txt
-uvicorn app:app --reload --port 8000
+python src/train.py --data data/BankChurners.csv --output-dir artifacts
 ```
-Then open `http://localhost:8000/docs` for interactive Swagger docs, or:
+
+MLflow uses the default local tracking store. View experiments with:
+
 ```bash
-curl -X POST http://localhost:8000/predict \
+mlflow ui
+```
+
+Training generates:
+
+```text
+artifacts/model_artifacts.joblib
+artifacts/reference_profile.json
+artifacts/training_report.json
+```
+
+The training report contains the chosen imbalance strategy, CV recall, validation threshold/cost, and untouched-test metrics.
+
+## Run tests
+
+```bash
+pytest -q
+```
+
+After leakage-safe retraining, the refreshed model artifact passed **10/10 automated tests** in the training environment. The model was generated with scikit-learn **1.8.0**, and the runtime dependency files are pinned to the same version for model-persistence compatibility.
+
+## Run the API
+
+```bash
+uvicorn api.app:app --reload --port 8000
+```
+
+Useful endpoints:
+
+```text
+GET  /health
+POST /predict
+GET  /docs
+GET  /metrics
+```
+
+Example:
+
+```bash
+curl -X POST "http://localhost:8000/predict?threshold=0.25" \
   -H "Content-Type: application/json" \
   -d '{
-    "Customer_Age": 45, "Gender": "M", "Dependent_count": 3,
-    "Education_Level": "Graduate", "Marital_Status": "Married",
-    "Income_Category": "$60K - $80K", "Card_Category": "Blue",
-    "Months_on_book": 36, "Total_Relationship_Count": 3,
-    "Months_Inactive_12_mon": 2, "Contacts_Count_12_mon": 3,
-    "Credit_Limit": 8500.0, "Total_Revolving_Bal": 1200.0,
-    "Total_Amt_Chng_Q4_Q1": 0.75, "Total_Trans_Amt": 4200.0,
-    "Total_Trans_Ct": 55, "Total_Ct_Chng_Q4_Q1": 0.65,
+    "Customer_Age": 45,
+    "Gender": "M",
+    "Dependent_count": 3,
+    "Education_Level": "Graduate",
+    "Marital_Status": "Married",
+    "Income_Category": "$60K - $80K",
+    "Card_Category": "Blue",
+    "Months_on_book": 36,
+    "Total_Relationship_Count": 3,
+    "Months_Inactive_12_mon": 2,
+    "Contacts_Count_12_mon": 3,
+    "Credit_Limit": 8500.0,
+    "Total_Revolving_Bal": 1200.0,
+    "Total_Amt_Chng_Q4_Q1": 0.75,
+    "Total_Trans_Amt": 4200.0,
+    "Total_Trans_Ct": 55,
+    "Total_Ct_Chng_Q4_Q1": 0.65,
     "Avg_Utilization_Ratio": 0.14
   }'
 ```
 
-**With Docker** (build and run verified locally)
+Invalid thresholds such as `threshold=2` return HTTP **422** rather than silently producing nonsensical decisions.
+
+## Docker
+
 ```bash
-cd api
-docker build -t churn-api .
-docker run -p 8000:8000 churn-api
+docker build -f api/Dockerfile -t churn-api .
+docker run --rm -p 8000:8000 churn-api
 ```
 
-## What's not included
+The CI workflow repeats the Docker build on GitHub. Docker itself was not available in the execution environment used to prepare this revision, so the local image build could not be executed here.
 
-A hosted, publicly reachable demo (e.g. on Render/Railway/HF Spaces) is not included — the API and
-Docker image are fully built and verified locally, but haven't been deployed to a public endpoint.
+## Monitoring and drift
+
+Start the API with an optional JSONL prediction log:
+
+```bash
+PREDICTION_LOG_PATH=prediction_logs/predictions.jsonl \
+uvicorn api.app:app --port 8000
+```
+
+After enough traffic:
+
+```bash
+python monitoring/drift.py \
+  --reference artifacts/reference_profile.json \
+  --predictions prediction_logs/predictions.jsonl
+```
+
+For a real deployment, ship logs and Prometheus metrics to managed infrastructure rather than depending on the container filesystem.
+
+## Deployment
+
+`render.yaml` is included for an easy public portfolio deployment. Connect the GitHub repo to Render and deploy the Docker service; `/health` is configured as the health check. The same container can be moved to Azure Container Apps, AWS ECS/App Runner, or GCP Cloud Run later.
+
+## Interview story
+
+The strongest engineering story is no longer simply "AUC ≈ 0.99." It is:
+
+- I identified that recent activity variables make the task closer to detecting ongoing disengagement than long-horizon forecasting.
+- I fixed fold-level resampling leakage in hyperparameter tuning.
+- I benchmarked imbalance-handling alternatives instead of assuming SMOTE was best.
+- I separated CV/model selection, business-threshold selection, and untouched final testing.
+- I made the model reproducible and testable behind a validated API.
+- I added CI, MLflow tracking, operational metrics, and drift monitoring.
+- I explicitly refused to fabricate temporal validation when the source data does not support it.

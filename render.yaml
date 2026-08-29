@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: thera-bank-churn-api
+    runtime: docker
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: LOG_LEVEL
+        value: INFO
